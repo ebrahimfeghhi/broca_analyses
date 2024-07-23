@@ -2,7 +2,7 @@
 sentences/
 processed_data/
 diagnosticBlocks/
-
+tuningTasks/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
