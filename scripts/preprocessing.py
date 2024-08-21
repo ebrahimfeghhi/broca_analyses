@@ -44,8 +44,9 @@ def get_trial_numbers(session_X):
             trialNumber += 1
             
         # if the next timestep is a delay, then a new trial has started.
-        # I do greater than 0 (instead of equal to 1) because sometimes 
-        # trialState is equal to 3 (for reasons unknown...)
+        # I do greater than 0 (instead of equal to 1) because trialState can equal 2 
+        # , which indicates return period on tuning tasks. Also trialState can equal 3 
+        # on sentences to indicate the patient output is being red by google text2speech.
         elif t > 0 and trialState[i+1] == 0:
             trialNumber+=1
             
