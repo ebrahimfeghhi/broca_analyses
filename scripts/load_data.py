@@ -37,22 +37,49 @@ def map_from_channel_index_to_brain_area(index):
         return 'ip_44'
     else:
         raise ValueError("Index out of range. Valid indices are between 0 and 255.")
-
-def bin_relative_to_go_cue(trialNumber, trialState):
+    
+def remove_delay_mismatch_trials(trialState_tn, trialDelays, tn, remove_thresh=0.1):
     
     '''
-    :param list trialNumber:  
-    :param list trialState: 
+    :param list trialState: the trial state for every timestep for the trial at index tn
+    :param list trialDelays: precomputed trialDelays for every trial
+    :param int tn: trialnum index
+    :param float remove_thresh: if the diff is greater than remove_thresh seconds, remove
     
-    trialNumber and trialState should contain the trial numbers and trial state for lists within a block.
-    This function will return the bin relative to go cue for each trial.
+    Simple function which checks if the delay computed using trialState matches the 
+    delay at index tn for trialDelays. 
+    '''
+    
+    remove_trial = False
+    
+    td = trialDelays[tn] # trial delay time for index tn
+    delay_time_from_trialState = (np.argwhere(trialState_tn==0).shape[0])*20/1000 # convert to sec
+    
+    if np.abs(delay_time_from_trialState - td) > remove_thresh:
+        remove_trial = True
+        
+    return remove_trial
+    
+def bin_relative_to_go_cue(trialNumber, trialState, trialDelays):
+    
+    '''
+    :param list trialNumber: indicates the trial each time bin belongs to 
+    :param list trialState: indicates whether each time bin is delay (0), go (1), or google text2speech (3)
+    :param list trialDelays: delay length for each trial
+    
+    This function will return the bin relative to go cue for each trial, as well as indices corresponding
+    to trials which need to be removed due to incorrect delay timing. 
     '''
             
     assert trialNumber.shape[0] == trialState.shape[0], print("Shapes are mismatched")
-    trialNum_unq, trialNum_count = np.unique(trialNumber, return_counts=True)
+    trialNum_unq, _ = np.unique(trialNumber, return_counts=True)
     
     bil_rel_to_go = []
     
+    # there are some trials where the precomputed delay times don't match the trialState
+    # times. Based on Frank's recommendation, we'll remove those. 
+    remove_trial_idxs = [] # stores trialNumbers that should be removed
+    num_trials_removed = 0
     for tn in trialNum_unq:
         
         # get indices for given trial
@@ -63,15 +90,13 @@ def bin_relative_to_go_cue(trialNumber, trialState):
         
         # get trialState for selected trial
         trialState_tn = trialState[tn_idxs].squeeze()
-        
-        # find index where go cue occurs
+     
         first_go_idx = np.argwhere(trialState_tn==1).squeeze()[0]
 
         # add list that increases by 1 each element, and element at first_go_idx is 0
         bil_rel_to_go.extend(np.arange(num_bins_trial) - first_go_idx)
-        
+            
     return bil_rel_to_go
-
             
 def select_block_ids(session_dict, select_block):
     
@@ -172,13 +197,15 @@ def store_data_to_pandas(session_dict, session_name, selected_block_numbers=[],
     trialState = session_dict['trialState'].squeeze()
     stimuli = session_dict[stimuliKey].squeeze()
     blockType = session_dict['blockTypes']
+    trialDelayTimes = session_dict['trialDelayTimes'].squeeze()
+    audioEnvelope = session_dict['audioEnvelope'].squeeze()
     
     map_blocknum_to_blocktype = {}
     for bn, bt in zip(np.unique(blockNum), blockType):
         map_blocknum_to_blocktype[bn] = bt[0]
     
     store_data_in_dict = {'blockNum': [], 'blockName': [], 'session': [], 'trialState': [], 
-    'stimuli': [], 'trialNumber': [], 'bin_rel_go': []}
+    'stimuli': [], 'trialNumber': [], 'bin_rel_go': [], 'audioEnvelope':[]}
     
     num_channels = spikePow.shape[1]
     
@@ -196,6 +223,30 @@ def store_data_to_pandas(session_dict, session_name, selected_block_numbers=[],
         # get idxs corresponding to the specified block (sb)
         sb_idxs = np.argwhere(blockNum==sb).squeeze()
         
+        # trialState is 0 (delay) or 1 (go cue), or 3 (google text2speech)
+        trialState_sb = trialState[sb_idxs].squeeze()
+        
+        # neural data is stored in 20ms bins. trialNumbers indicates that trial that each bin belongs to
+        trialNumber_sb = trialNumbers[sb_idxs].squeeze()
+        
+        # for each trial, store bin idx relative to go cue
+        bin_relative_to_go_cue_list = bin_relative_to_go_cue(trialNumber_sb, trialState_sb, trialDelayTimes)
+        
+        # add the indices corresponding to the trial to be removed 
+        # using the session level indices (because that's what sb_idxs refers to)
+        #remove_trial_idxs = []
+        #for trial in remove_trials:
+        #    remove_trial_idxs.extend(np.argwhere(trialNumbers==trial))
+        
+        #print(f'removing {nt_removed} trials out of {np.unique(trialNumber_sb).shape[0]} trials')
+        
+        # remove the mismatch trials from the selected block idxs
+        #sb_idxs = np.setdiff1d(sb_idxs, remove_trial_idxs)
+        
+        # reselect trialState and trialNumber now that we've removed trials 
+        trialState_sb = trialState[sb_idxs].squeeze()
+        trialNumber_sb = trialNumbers[sb_idxs].squeeze()
+                
         num_time_bins = sb_idxs.shape[0]
         
         if zscore_bool:        
@@ -205,23 +256,15 @@ def store_data_to_pandas(session_dict, session_name, selected_block_numbers=[],
         else:
             spikePow_sb = spikePow[sb_idxs].squeeze()
             threshCross_sb = threshCross[sb_idxs].squeeze()
-        
-        # trialState is 0 (delay) or 1 (go cue)
-        trialState_sb = trialState[sb_idxs].squeeze()
-        
+       
         # repeat block number and session name to store in long format 
         sb_repeated = np.repeat(sb, num_time_bins)
         block_name_repeated = np.repeat(map_blocknum_to_blocktype[sb], num_time_bins)
         session_name_repeated = np.repeat(session_name, num_time_bins)
         
-        # neural data is stored in 20ms bins. trialNumbers indicates that trial
-        # that each bin belongs to
-        trialNumber_sb = trialNumbers[sb_idxs].squeeze()
-        
-        # for each trial, store bin idx relative to go cue
-        bin_relative_to_go_cue_list = bin_relative_to_go_cue(trialNumber_sb, trialState_sb)
-        
         stimuli_sb = stimuli_num_trials(trialNumber_sb, stimuli)
+        
+        audioEnvelope_sb = audioEnvelope[sb_idxs].squeeze()
         
         for i in range(num_channels):
             
@@ -231,6 +274,23 @@ def store_data_to_pandas(session_dict, session_name, selected_block_numbers=[],
             store_data_in_dict[f'pow-{ba}-{i}'].extend(spikePow_sb[:, i])
             store_data_in_dict[f'tx-{ba}-{i}'].extend(threshCross_sb[:, i])
             
+                # Get lengths of all arrays
+        lengths = [
+            len(trialState_sb),
+            len(sb_repeated),
+            len(block_name_repeated),
+            len(session_name_repeated),
+            len(trialNumber_sb),
+            len(stimuli_sb),
+            len(bin_relative_to_go_cue_list),
+            len(audioEnvelope_sb)
+        ]
+
+        # Check if all lengths are equal
+        if not all(length == lengths[0] for length in lengths):
+            breakpoint()
+           
+        store_data_in_dict['audioEnvelope'].extend(audioEnvelope_sb) 
         store_data_in_dict['trialState'].extend(trialState_sb)
         store_data_in_dict['blockNum'].extend(sb_repeated)
         store_data_in_dict['blockName'].extend(block_name_repeated)

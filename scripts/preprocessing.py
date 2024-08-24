@@ -30,7 +30,8 @@ def get_trial_numbers(session_X):
     :param dict session_X:
     
     Returns a list of length number of bins, where each value indicates
-    the trial that the bin belongs to. 
+    the trial that the bin belongs to. trialNumber is computed for entire session
+    (not within each block.)
     '''
     
     trialState = session_X['trialState']
