@@ -18,7 +18,9 @@ def create_block_sess_dict(block_sess):
             
             
     for sess, val in block_sess_dict.items():
-        block_sess_dict[sess] = sorted(val)
+        int_list = list(map(int, val))
+        int_list.sort()
+        block_sess_dict[sess] = list(map(str, int_list))
             
     return block_sess_dict
 
@@ -27,9 +29,9 @@ class blockCV(BaseEstimator):
     def __init__(self, block_sess, block_sess_dict, n_splits):
         
         '''
-        :param ndarray: numpy array where each element is a string of format BN_SESS, where BN is the block number
+        :param ndarray block_sess: numpy array where each element is a string of format BN_SESS, where BN is the block number
         and SESS is the session name
-        :param dict block_sess_dict: each key is a session name, and the values are lists containing the block numbers for that seesssion
+        :param dict block_sess_dict: each key is a session name, and the values are lists containing the block numbers for that session (in sorted order)
         :param int n_splits: the number of k-fold splits 
         '''
         
@@ -46,10 +48,13 @@ class blockCV(BaseEstimator):
 
         # Precompute block-to-index mappings for fast lookup
         block_sess_dict_rev = {}
+        
         for idx, block_sess in enumerate(self.block_sess):
             block, sess_name = block_sess.split('_', 1)
+            
             if (block, sess_name) not in block_sess_dict_rev:
                 block_sess_dict_rev[(block, sess_name)] = []
+                
             block_sess_dict_rev[(block, sess_name)].append(idx)
 
         for split_idx in range(self.n_splits):
@@ -57,6 +62,7 @@ class blockCV(BaseEstimator):
             train_idx, test_idx = [], []
 
             for sess_name, blocks in self.block_sess_dict.items():
+                
                 blocks = np.array(blocks)
                 
                 # Split the blocks into n_splits parts
@@ -64,6 +70,7 @@ class blockCV(BaseEstimator):
                 
                 # Test blocks for this split
                 test_blocks = splits[split_idx]
+                
                 # Training blocks are all other blocks
                 train_blocks = np.concatenate(splits[:split_idx] + splits[split_idx + 1:])
             
