@@ -78,6 +78,8 @@ feature_grouper = preprocess_himalayas(features_list, use_kernelized=False)
 
 if val_sess:
     validation_sessions = np.load("/data/LLMs/willet/val_sess.npy")
+else:
+    validation_sessions = None
     
 
 run_regression(X, y, sessions_all, val_sess, validation_sessions, block_sess_all, n_splits, 
