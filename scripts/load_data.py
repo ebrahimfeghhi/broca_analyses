@@ -184,8 +184,8 @@ def store_data_to_pandas(session_dict, session_name, selected_block_numbers=[],
         spikePow: the power in 20 ms bins after high pass filtering 250 Hz for each of the 256 channels
         threshCross:  number of binned threshold crossings (4.5 x RMS threshold) for each of the 256 channels
         trialState: 0 for delay period, 1 for go period
-        stimuli: stimuli to produce, corresponding to each time bin (str). For stimuli trials this is the 
-        stimuli that was repeated, for orofacial its the orofacial movement the patient was instructed to produce,
+        stimuli: stimuli to produce, corresponding to each time bin (str). For sentence trials this is the 
+        sentence that was repeated, for orofacial its the orofacial movement the patient was instructed to produce,
         etc...
         trialNumber: trial number corresponding to each bin (int)
     '''
@@ -203,6 +203,7 @@ def store_data_to_pandas(session_dict, session_name, selected_block_numbers=[],
     map_blocknum_to_blocktype = {}
     for bn, bt in zip(np.unique(blockNum), blockType):
         map_blocknum_to_blocktype[bn] = bt[0]
+        
     
     store_data_in_dict = {'blockNum': [], 'blockName': [], 'session': [], 'trialState': [], 
     'stimuli': [], 'trialNumber': [], 'bin_rel_go': [], 'audioEnvelope':[]}
@@ -217,7 +218,7 @@ def store_data_to_pandas(session_dict, session_name, selected_block_numbers=[],
     # select all blocks if selected_block_numbers is []
     if len(selected_block_numbers) == 0:
         selected_block_numbers = np.unique(blockNum)
-        
+    
     for sb in selected_block_numbers:
         
         # get idxs corresponding to the specified block (sb)

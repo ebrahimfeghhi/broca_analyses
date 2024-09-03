@@ -7,7 +7,7 @@ DIR="/home2/ebrahim/neural_seq_decoder/scripts/"
 cd "$DIR" || { echo "Directory $DIR not found"; exit 1; }
 
 alphas=(0.03)
-delay=(75)
+delay=(25 50 100 200)
 
 # Loop through each alpha value first
 for alpha in "${alphas[@]}"; do
